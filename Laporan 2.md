@@ -27,7 +27,7 @@ Untuk mencapai tujuan tersebut, dua pendekatan akan diterapkan dalam proyek ini:
 
 ## Data Understanding
 
-Dataset yang digunakan adalah **Book Recommendation Dataset by arashanic** yang tersedia di [Kaggle](https://www.kaggle.com/datasets/arashnic/book-recommendation-dataset). Dataset ini terdiri dari informasi tentang buku dan rating yang diberikan oleh pengguna. Dataset ini memiliki sekitar 10.000 buku dan lebih dari 50.000 rating dari pengguna.
+Dataset yang digunakan adalah **Book Recommendation Dataset by arashanic** yang tersedia di [Link Sumber dataset](https://www.kaggle.com/datasets/arashnic/book-recommendation-dataset). Dataset ini terdiri dari informasi tentang buku dan rating yang diberikan oleh pengguna. Dataset ini memiliki sekitar 10.000 buku dan lebih dari 50.000 rating dari pengguna.
 
 ### Visualisasi dan Exploratory Data Analysis (EDA)
 
@@ -36,113 +36,204 @@ Dataset yang digunakan adalah **Book Recommendation Dataset by arashanic** yang 
 - Mengetahui informasi data books <br> ![image](https://github.com/user-attachments/assets/8fb87427-852a-4056-a00b-b261981060c8)
 - Mengetahui informasi data rating <br> ![image](https://github.com/user-attachments/assets/35dda53f-c4e1-45b2-986a-d67e421fdc37)
 
+Jadi dataset ini berisi
+- Users.csv : 278858 baris dan 3 kolom
+- Books.csv : 271360 baris dan 8 kolom
+- Ratings.csv : 1149780 baris dan 3 kolom
+
+#### Uraian Fitur
+Users.csv
+- User-ID : ID unik yang dianonimkan untuk setiap pengguna.
+- Location : Lokasi pengguna dalam format "Kota, Provinsi/Negara Bagian, Negara".
+- Age : Usia pengguna dalam tahun.
+
+Books.csv
+- ISBN : Nomor ISBN unik yang mengidentifikasi buku.
+- Book-Title : Judul buku.
+- Book-Author : Nama penulis buku.
+- Year-Of-Publication : Tahun buku tersebut diterbitkan.
+- Publisher : Nama penerbit buku.
+- Image-URL-S : URL gambar sampul buku berukuran kecil.
+- Image-URL-M : URL gambar sampul buku berukuran sedang.
+- Image-URL-L : URL gambar sampul buku berukuran besar.
+
+Ratings.csv
+- User-ID : ID pengguna yang memberikan rating.
+- ISBN : ISBN buku yang diberi rating.
+- Book-Rating : Nilai rating yang diberikan pengguna terhadap buku, biasanya dalam skala 0–10.
+
+#### Kondisi data. (missing value, duplikat, dan sebagainya)
+- Missing Value
+  - Terdapat 2 data Book-Author, 2 data Publisher hilang di data Books
+  - Terdapat 110762 data Age hilng di data Users
+  - Terdapat 0 data hilang di data ratings
+- Duplicate Datae
+  - Terdapat 0 data duplikat pada data books, users dan ratings
 
 
-## Data Preparation
+## Data Preparation dan Preprocessing
+Tahapan data preparation dan preprocessing meliputi beberapa langkah berikut:
 
-Tahapan data preparation meliputi beberapa langkah berikut:
-1. **Penghapusan nilai yang hilang**: Menghapus baris yang memiliki data kosong atau tidak lengkap, terutama pada kolom yang diperlukan untuk model rekomendasi seperti `rating`, `book_id`, dan `user_id`.
-2. **Melakukan drop kolom**: Melakukan drop pada data tidak perlu seperti 'Image-URL-S', 'Image-URL-M', 'Image-URL-L', 'Age', 'Location', 'Year-Of-Publication', 'Publisher'
-3. ""Melakukan penggabungan data**: Lakukan penggabungan data dengan cara bertahap. Gabungkan ratings dengan users lalu gabungkan merge_df dengan books
-```
-merge_df = pd.merge(ratings, users, on='User-ID', how='left')
-merge_df = pd.merge(merge_df, books, on='ISBN', how='left')
-```
+1. Menghapus Kolom Gambar dari Data Buku:
 
-## Modeling
+- Menghapus kolom Image-URL-S, Image-URL-M, dan Image-URL-L dari DataFrame books karena URL gambar tidak diperlukan untuk model rekomendasi yang akan dibangun.
+2. Menggabungkan Data:
+- Menggabungkan DataFrame ratings dengan DataFrame users berdasarkan User-ID untuk mendapatkan informasi pengguna terkait dengan setiap rating.
+- Menggabungkan hasil penggabungan sebelumnya (merge_df) dengan DataFrame books berdasarkan ISBN untuk menambahkan detail buku (judul, penulis, penerbit, tahun terbit) ke setiap rating.
+3. Menangani Missing Values Metadata Buku:
+- Mengidentifikasi dan menghapus baris dalam DataFrame gabungan (merge_df) yang memiliki missing values pada kolom metadata buku (Book-Title, Book-Author, Year-Of-Publication, Publisher). Ini dilakukan karena rating tanpa informasi buku yang lengkap tidak dapat digunakan untuk rekomendasi berbasis konten.
+4. Menghapus Kolom yang Kurang Relevan:
+- Menghapus kolom 'Age', 'Location', 'Year-Of-Publication', dan 'Publisher' dari DataFrame merge_df. Keputusan ini dibuat berdasarkan asumsi bahwa informasi ini kurang penting untuk model rekomendasi yang dikembangkan dibandingkan dengan rating, user ID, dan detail buku utama.
+5. Membuat Subset Data untuk Content-Based Filtering:
+- Mengambil 10.000 baris pertama dari DataFrame merge_df yang sudah dibersihkan dan menyimpannya dalam variabel data. Subset ini digunakan secara spesifik untuk pengembangan model Content-Based Filtering guna mengurangi waktu komputasi.
+6. Persiapan Data untuk Content-Based Filtering (TF-IDF):
+- Menginisialisasi objek TfidfVectorizer.
+- Melakukan proses fitting dan transforming pada kolom Book-Title dari subset data (data) untuk membuat matriks TF-IDF (tfidf_matrix). Matriks ini merepresentasikan setiap judul buku sebagai vektor numerik berdasarkan bobot Term Frequency-Inverse Document Frequency.
+- Membuat DataFrame dari matriks TF-IDF (cosine_sim_df) dengan indeks dan kolom berdasarkan judul buku, yang akan digunakan untuk menghitung kesamaan antar buku.
+7. Persiapan Data untuk Collaborative Filtering:
+- Membuat salinan DataFrame ratings yang sudah dibersihkan dan menamakannya dc.
+- Melakukan encoding pada User-ID dan ISBN yang unik menjadi indeks numerik untuk digunakan dalam model. Ini disimpan dalam dictionary user_encoded dan book_encoded, beserta dictionary decoding user_decode dan book_decode.
+- Menambahkan kolom 'user' dan 'book' ke DataFrame dc yang berisi hasil encoding numerik.
+- Mengonversi kolom Book-Rating menjadi tipe data float dan menormalisasikannya ke rentang 0-1.
+- Mengacak urutan baris dalam DataFrame dc untuk memastikan distribusi data yang baik saat pembagian.
+- Membagi data menjadi set training (x_train, y_train) dan validation set (x_val, y_val) untuk melatih dan mengevaluasi model Collaborative Filtering.
 
-Dua model rekomendasi buku akan digunakan dalam proyek ini:
+## Model Development
 
-1. **Content-Based Filtering**: Model ini menggunakan fitur penulis untuk memberikan rekomendasi. Model ini bekerja dengan mencari buku yang mirip berdasarkan fitur-fitur tersebut.
-   - **Tahapan**: Tahapan Singkat Content-Based Filtering:
-      - Pemilihan Data: Mengambil 10.000 baris pertama dari data gabungan (merge_df) sebagai subset data (data) untuk model content-based.
-      - Representasi Fitur (Vectorization): Mengubah judul buku (Book-Title) menjadi vektor numerik menggunakan TF-IDF Vectorizer.
-      - Perhitungan Kesamaan: Mengukur kesamaan antar buku berdasarkan vektor TF-IDF menggunakan Cosine Similarity.
-      - Pembuatan Rekomendasi: Membuat fungsi (book_recommendations) untuk merekomendasikan buku berdasarkan kesamaan penulis, meskipun implementasi saat ini menggunakan kesamaan judul melalui TF-IDF.
+Dalam proyek ini, dua skema sistem rekomendasi dikembangkan: Content-Based Filtering dan Collaborative Filtering.
 
-   - **Parameter Utama yang Digunakan**:
-      - TfidfVectorizer():
-        Tidak ada parameter spesifik yang dimodifikasi dari nilai default saat inisialisasi (tf = TfidfVectorizer()). Ini berarti menggunakan default seperti lowercase=True, stop_words=None, ngram_range=(1, 1), dll.
-Data yang digunakan untuk .fit() dan .fit_transform() adalah kolom Book-Title dari DataFrame data (yang merupakan 10.000 baris pertama).
-      - cosine_similarity():
-        Inputnya adalah matriks TF-IDF yang dihasilkan dari tfidf_matrix = tf.fit_transform(data['Book-Title']).
-      - book_recommendations() function:
-         - book_author: Nama penulis sebagai input untuk rekomendasi.
-         - similarity_data: Matriks cosine similarity (cosine_sim_df) yang digunakan untuk mencari buku serupa.
-         - items: DataFrame yang berisi informasi buku (data[['Book-Title', 'Book-Author']]) untuk ditampilkan dalam rekomendasi.
-         - k: Jumlah rekomendasi yang diinginkan (default 10).
-        
-        Secara ringkas, model content-based Anda menggunakan TF-IDF pada judul buku untuk menghitung kesamaan kosinus, dan kemudian merekomendasikan buku berdasarkan kesamaan tersebut, dengan input awal berupa nama penulis (meskipun kesamaan dihitung berdasarkan judul).
-   - **Kelebihan**: Mudah dipahami dan dapat memberikan rekomendasi berdasarkan item yang benar-benar mirip dengan preferensi pengguna.
-   - **Kekurangan**: Terbatas pada buku dengan informasi yang lengkap dan tidak bisa memberikan rekomendasi yang sangat berbeda dari buku yang telah dinilai tinggi.
+### 1. Content-Based Filtering
 
-2. **Collaborative Filtering**: Model ini berbasis pada perilaku pengguna, seperti buku yang disukai oleh pengguna dengan preferensi yang mirip. Pengguna yang memiliki rating serupa akan diberi rekomendasi buku berdasarkan buku yang disukai oleh pengguna lain.
+Model Content-Based Filtering merekomendasikan buku kepada pengguna berdasarkan kesamaan konten atau fitur dari buku-buku yang disukai pengguna di masa lalu. Dalam implementasi ini, kesamaan diukur berdasarkan judul buku.
 
-   - **Tahapan**:
-      - Penggunaan Data Rating: Menggunakan seluruh data rating (ratings) sebagai dasar interaksi pengguna dan buku.
-      - Encoding ID: Mengubah User-ID dan ISBN menjadi indeks numerik (user dan book) untuk memudahkan penggunaan dalam model neural network.
-      - Pembagian Data: Membagi data yang sudah di-encode menjadi training set (90%) dan validation set (10%).
-      - Normalisasi Rating: Menormalisasi nilai rating ke rentang 0-1.
-      - Pembuatan Model (Matrix Factorization with Embeddings): Membangun model neural network dengan layer embedding terpisah untuk pengguna dan buku, lalu menggabungkan representasi (embedding vectors) keduanya menggunakan operasi dot product untuk memprediksi rating.
-      - Pelatihan Model: Melatih model menggunakan data training dan memvalidasinya pada data validation.
-      - Pembuatan Rekomendasi: Membuat fungsi (recommend_books) untuk memprediksi rating pengguna target untuk buku-buku yang belum dirating, dan merekomendasikan buku dengan prediksi rating tertinggi.
-   - **Parameter**:
-      - Data Input: DataFrame dc (yang merupakan DataFrame ratings).
-      - Encoding: Mapping user_encoded dan book_encoded dibuat berdasarkan unique User-ID dan ISBN dalam dc.
-      - Pembagian Data: train_indices ditentukan sebagai 90% dari total jumlah baris data (0.9 * dc.shape[0]).
-      - Normalisasi Rating: Dilakukan scaling linear berdasarkan min_rate dan max_rate dari kolom Book-Rating di dc.
-      - Arsitektur Model (tf.keras.Model):
-         - embedding_dim: Dimensi embedding vector untuk pengguna dan buku, diset ke 32.
-         - Layer tf.keras.layers.Embedding: Menggunakan num_users dan num_books (jumlah unique user/book) sebagai input_dim, dan embedding_dim sebagai output_dim.
-         - Layer tf.keras.layers.dot: Menggunakan axes=1 untuk melakukan dot product antara vektor pengguna dan buku.
-      - Kompilasi Model (model.compile):
-         - optimizer: 'adam'
-         - loss: 'mean_squared_error'
-         - metrics: Anda menambahkan [tf.keras.metrics.RootMeanSquaredError()] di modifikasi terakhir yang saya ajukan (meskipun Anda menolaknya, ini adalah metrik yang relevan untuk dibahas jika Anda menggunakannya). *[Note: Based on the current notebook state after user rejections, RMSE metric is NOT added to compilation. I will stick to the code state after rejections when describing parameters.]*
-      - Pelatihan Model (model.fit):
-         - epochs: Diset ke 5.
-         - validation_data: Menggunakan ([x_val[:, 0], x_val[:, 1]], y_val).
-         - verbose: Diset ke 1 untuk menampilkan progress pelatihan.
-         - Batch size menggunakan nilai default Keras (biasanya 32).
-      - recommend_books() function:
-         - user_id: ID pengguna untuk rekomendasi.
-         - dc_df: DataFrame rating (dc) untuk mengetahui buku yang sudah dirating pengguna.
-         - books_df: DataFrame buku (books) untuk mendapatkan detail buku.
-         - k: Jumlah rekomendasi yang diinginkan (default 10).
-   
-   Dengan parameter-parameter ini, model Collaborative Filtering Anda belajar merepresentasikan pengguna dan buku dalam ruang embedding 32 dimensi untuk memprediksi rating yang mungkin diberikan pengguna pada buku yang belum mereka baca.
-   - **Kelebihan**: Dapat memberikan rekomendasi yang lebih personal berdasarkan pola perilaku pengguna lain.
-   - **Kekurangan**: Memerlukan data yang lebih banyak untuk menghasilkan rekomendasi yang akurat dan dapat mengalami kesulitan dengan pengguna baru (cold start problem).
+*   **Konsep Dasar**: Jika pengguna menyukai suatu buku, model akan mencari buku lain yang memiliki fitur konten serupa (dalam hal ini, kata-kata dalam judul buku).
+*   **Algoritma yang Digunakan**:
+        *   **Implementasi dalam Kode**: Objek `TfidfVectorizer` diinisialisasi (`tf = TfidfVectorizer()`) dan kemudian diterapkan pada kolom `Book-Title` dari subset data (`data`) menggunakan `tf.fit_transform(data['Book-Title'])`. Hasilnya adalah matriks TF-IDF (`tfidf_matrix`).
+    *   **Cosine Similarity**: Digunakan untuk mengukur tingkat kesamaan antara dua vektor TF-IDF (dalam hal ini, vektor judul buku). Nilai Cosine Similarity berkisar antara 0 (tidak ada kesamaan) hingga 1 (sangat mirip). Semakin tinggi nilai Cosine Similarity antara dua judul buku, semakin mirip kedua buku tersebut dianggap.
+        *   **Implementasi dalam Kode**: Fungsi `cosine_similarity()` dari `sklearn.metrics.pairwise` digunakan untuk menghitung matriks kesamaan antara semua pasangan vektor dalam `tfidf_matrix` (`cosine_sim = cosine_similarity(tfidf_matrix)`). Matriks ini kemudian diubah menjadi DataFrame (`cosine_sim_df`) dengan indeks dan kolom berupa judul buku.
+*   **Cara Kerja Rekomendasi**:
+    *   Fungsi `book_recommendations` mengambil judul buku input.
+    *   Mencari skor kesamaan buku input dengan semua buku lain menggunakan `cosine_sim_df`.
+    *   Mengurutkan buku berdasarkan skor kesamaan secara menurun.
+    *   Mengambil `k` buku teratas yang paling mirip (mengecualikan buku input itu sendiri).
+    *   Mengembalikan informasi (ISBN, Judul, Penulis) dari buku-buku yang direkomendasikan.
+*   **Kelebihan Content-Based Filtering**:
+    *   Tidak memerlukan data tentang pengguna lain; rekomendasi hanya didasarkan pada preferensi pengguna target dan fitur item.
+    *   Dapat merekomendasikan item baru yang belum pernah dinilai oleh siapa pun (masalah *cold-start* pada item).
+    *   Mampu merekomendasikan item kepada pengguna baru asalkan ada data preferensi minimal (masalah *cold-start* pada pengguna dapat dikurangi jika ada interaksi awal).
+    *   Rekomendasi mudah dijelaskan berdasarkan fitur item.
+*   **Kekurangan Content-Based Filtering**:
+    *   Kualitas rekomendasi sangat bergantung pada kekayaan dan struktur fitur item.
+    *   Cenderung merekomendasikan item yang sangat mirip dengan yang sudah disukai pengguna, membatasi penemuan item baru yang berbeda (*serendipity* rendah).
+    *   Membutuhkan analisis konten yang mendalam untuk setiap item.
 
+### 2. Collaborative Filtering
+
+Model Collaborative Filtering merekomendasikan buku kepada pengguna berdasarkan perilaku (rating) dari pengguna lain yang memiliki selera serupa.
+
+*   **Konsep Dasar**: Pengguna yang memiliki pola rating yang mirip cenderung memiliki selera yang sama. Model ini mencari pengguna yang mirip dengan pengguna target dan merekomendasikan buku yang disukai oleh pengguna serupa tersebut, tetapi belum pernah dibaca atau dinilai oleh pengguna target.
+*   **Algoritma yang Digunakan**:
+    *   **Neural Network dengan Embedding Layers**: Model ini menggunakan arsitektur Neural Network sederhana dengan embedding layer untuk merepresentasikan pengguna dan buku dalam ruang vektor dimensi rendah.
+        *   **Implementasi dalam Kode**:
+            *   **Embedding Layers**: Dua `Embedding` layer dibuat, satu untuk pengguna (`user_embedding`) dan satu untuk buku (`book_embedding`), dengan dimensi embedding sebesar 32 (`embedding_dim = 32`). Embedding layer mengubah input user ID dan book ID yang sudah di-encode menjadi vektor padat (dense vector) yang menangkap karakteristik pengguna dan buku.
+            *   **Flatten Layers**: Output dari embedding layer di-flatten menjadi vektor satu dimensi (`user_vec`, `book_vec`).
+            *   **Dot Product Layer**: Sebuah layer `dot` digunakan untuk menghitung produk titik (dot product) antara vektor pengguna dan vektor buku. Produk titik ini merepresentasikan skor prediksi rating atau tingkat kecocokan antara pengguna dan buku.
+            *   **Model Keras**: Model didefinisikan menggunakan Keras Functional API, mengambil input user dan book, dan menghasilkan skor produk titik. Model dikompilasi dengan optimizer 'adam' dan loss function 'mean_squared_error' (MSE), yang umum digunakan untuk tugas prediksi rating.
+*   **Cara Kerja Rekomendasi**:
+    *   Fungsi `recommend_books` mengambil `user_id` target.
+    *   Mengidentifikasi buku-buku yang belum dinilai oleh pengguna target.
+    *   Menggunakan model Neural Network yang sudah dilatih untuk memprediksi rating yang mungkin diberikan pengguna target untuk buku-buku yang belum dinilai tersebut.
+    *   Mengurutkan buku berdasarkan prediksi rating tertinggi.
+    *   Mengambil `k` buku dengan prediksi rating tertinggi sebagai rekomendasi.
+    *   Mengembalikan informasi (ISBN, Judul, Penulis) dari buku-buku yang direkomendasikan.
+*   **Kelebihan Collaborative Filtering**:
+    *   Mampu merekomendasikan item yang benar-benar baru atau berbeda dari yang sebelumnya disukai pengguna (*serendipity* tinggi).
+    *   Tidak memerlukan analisis konten item secara mendalam.
+    *   Mampu menangani item dengan struktur data yang minimal, asalkan ada data interaksi pengguna.
+*   **Kekurangan Collaborative Filtering**:
+    *   Mengalami masalah *cold-start* baik untuk pengguna baru (tidak ada data interaksi untuk dicocokkan) maupun item baru (belum ada interaksi rating).
+    *   Masalah *sparsity* data: Sulit menemukan pengguna yang mirip atau membuat prediksi akurat jika data interaksi pengguna-item sangat jarang.
+    *   Rekomendasi mungkin bias terhadap item populer.
+    *   Sulit memberikan penjelasan yang intuitif mengapa suatu item direkomendasikan.
+
+Kedua model ini menawarkan pendekatan yang berbeda untuk rekomendasi buku, masing-masing dengan kekuatan dan kelemahannya sendiri, dan dapat digunakan secara independen atau digabungkan (Hybrid Recommendation System) untuk meningkatkan kualitas rekomendasi dan mengatasi keterbatasan masing-masing.
 ## Uji
-- Content Based <br> ![image](https://github.com/user-attachments/assets/a1502cc0-31dd-4277-800a-9c47930d04fb)
-- Collaborative Filtering <br> ![image](https://github.com/user-attachments/assets/2a584cb0-79d5-43a0-8a72-e94d779784d8)
+- Content Based <br> ![image](https://github.com/user-attachments/assets/f1ed207a-bc8f-44ed-aad1-d9f5987951a9)
+
+- Collaborative Filtering <br> ![image](https://github.com/user-attachments/assets/71383918-9f7b-4040-b98c-7b87078b797e)
+
 
 
 ## Evaluation
 
-Berikut adalah rangkuman singkat mengenai evaluasi kedua model rekomendasi:
+Berikut adalah rangkuman evaluasi dari dua pendekatan sistem rekomendasi yang dikembangkan, yaitu Content-Based Filtering dan Collaborative Filtering, serta keterkaitannya dengan pemahaman bisnis (Business Understanding) yang telah ditetapkan sebelumnya.
 
 ### Content-Based Filtering
-- Matriks yang Digunakan:
-   - Cosine Similarity: Digunakan untuk mengukur kesamaan antara buku input ('The Lovely Bones') dengan buku-buku lain dalam dataset terbatas.
-- Hasil:
-   - Rekomendasi buku ditampilkan berdasarkan kesamaan konten (judul) dengan 'The Lovely Bones'.
-   - Nilai Cosine Similarity untuk beberapa buku lain terhadap 'The Lovely Bones' berkisar antara sekitar 0.27 hingga 0.52. Buku dengan nilai similarity lebih tinggi dianggap lebih relevan secara konten. Contohnya, 'The Hours: A Novel' memiliki similarity tertinggi (sekitar 0.52).
+
+* **Matriks Evaluasi yang Digunakan:**
+
+  * **Cosine Similarity:** Digunakan untuk mengukur kesamaan konten antara buku input ('Flesh Tones: A Novel') dengan buku-buku lainnya.
+  * **Precision\@10:** 0.9000
+  * **Recall\@10:** 1.0000
+
+* **Hasil Evaluasi:**
+
+  * Sistem berhasil merekomendasikan 9 dari 10 buku yang relevan berdasarkan konten.
+  * Precision yang tinggi menunjukkan bahwa sebagian besar buku yang direkomendasikan memang relevan.
+  * Recall sempurna menunjukkan bahwa semua buku relevan berhasil ditemukan dalam 10 rekomendasi teratas.
+  * Rekomendasi ditampilkan berdasarkan kemiripan konten dengan buku input, seperti:
+
+    * Jonathan Kellerman : *Flesh and Blood*
+    * Michael Cunningham : *The Hours: A Novel*
+    * Clive Barker : *IN THE FLESH*
+
+* **Keterkaitan dengan Business Understanding:**
+
+  * **Menjawab Problem Statement 1:** Membantu pengguna menemukan buku yang mirip dengan buku yang mereka sukai.
+  * **Mencapai Goal 1 & 2:** Menyediakan rekomendasi yang relevan dan meningkatkan pengalaman pengguna.
+  * **Solusi yang Diberikan Berdampak:** Precision dan recall yang tinggi menunjukkan bahwa solusi ini berhasil dalam memenuhi ekspektasi dan kebutuhan pengguna terkait relevansi konten.
 
 ### Collaborative Filtering
-- Matriks yang Digunakan:
-   - Training Loss (MSE): Mean Squared Error pada data pelatihan.
-   - Validation Loss (MSE): Mean Squared Error pada data validasi.
-   - Training RMSE: Root Mean Squared Error pada data pelatihan.
-   - Validation RMSE: Root Mean Squared Error pada data validasi.
-- Hasil:
-   - Training Loss (MSE): 0.0349 (pada akhir epoch). Ini menunjukkan error rata-rata yang sangat rendah pada data yang digunakan untuk melatih model.
-   - Validation Loss (MSE): 0.2215 (pada akhir epoch). Error pada data validasi jauh lebih tinggi dibandingkan data pelatihan, yang bisa mengindikasikan model mengalami overfitting.
-   - Training RMSE: 0.1868 (pada akhir epoch). Ini adalah akar dari Training MSE.
-   - Validation RMSE: 0.4706 (pada akhir epoch). Ini adalah akar dari Validation MSE. Nilai ini menunjukkan rata-rata selisih antara rating prediksi dan rating aktual pada data validasi adalah sekitar 0.47 (dalam skala rating yang sudah dinormalisasi 0-1).
-   - Contoh rekomendasi buku untuk User ID 201768 juga ditampilkan, menunjukkan daftar buku yang diprediksi memiliki rating tinggi oleh model untuk pengguna tersebut.
- 
-<br>![image](https://github.com/user-attachments/assets/e2faf018-a863-41cf-8b48-53c2297a3f06)
 
-Secara ringkas, Content-Based Filtering dievaluasi berdasarkan kesamaan konten menggunakan Cosine Similarity, sementara Collaborative Filtering dievaluasi berdasarkan akurasi prediksi rating menggunakan MSE dan RMSE. Hasil menunjukkan model CF memiliki error prediksi yang lebih tinggi pada data validasi dibandingkan data pelatihan.
+* **Matriks Evaluasi yang Digunakan:**
+
+  * **Training Loss (MSE):** 0.0349
+  * **Validation Loss (MSE):** 0.2210
+  * **Training RMSE:** 0.1867
+  * **Validation RMSE:** 0.4701
+
+* **Hasil Evaluasi:**
+
+  * Nilai error yang rendah pada data pelatihan menunjukkan model belajar dengan baik dari data tersebut.
+  * Perbedaan signifikan antara error training dan validasi mengindikasikan adanya overfitting.
+  * Model tetap mampu memberikan rekomendasi yang sesuai untuk pengguna baru, contohnya:
+
+    * Sam Siciliano : *Darkness*
+    * Emma McLaughlin : *The Nanny Diaries: A Novel*
+    * William Gibson : *Mona Lisa Overdrive*
+
+* **Keterkaitan dengan Business Understanding:**
+
+  * **Menjawab Problem Statement 2:** Mengatasi keterbatasan sistem rekomendasi yang tidak personal dengan memanfaatkan data perilaku pengguna.
+  * **Mencapai Goal 1 & 2:** Memberikan rekomendasi berdasarkan preferensi kolektif pengguna serupa, menjadikan pengalaman lebih personal.
+  * **Solusi yang Diberikan Berdampak:** Walaupun ada indikasi overfitting, model tetap dapat memberikan rekomendasi yang relevan, mendekati kebutuhan pengguna.
+
+## Kesimpulan
+
+Kedua pendekatan memberikan kontribusi terhadap pemecahan masalah bisnis:
+
+* **Content-Based Filtering** unggul dalam menemukan buku-buku serupa dengan minat pengguna berdasarkan konten buku.
+* **Collaborative Filtering** menawarkan pendekatan yang lebih personal berdasarkan perilaku pengguna lain.
+
+Dengan hasil evaluasi ini, dapat disimpulkan bahwa:
+
+* Sistem rekomendasi telah berhasil menjawab semua problem statement yang diajukan.
+* Goals bisnis tercapai melalui akurasi rekomendasi yang baik dan pengalaman pengguna yang ditingkatkan.
+* Kedua solusi terbukti berdampak positif dan dapat dikembangkan lebih lanjut, terutama untuk meningkatkan generalisasi model collaborative filtering agar tidak overfitting.
+
+---
+
+![image](https://github.com/user-attachments/assets/a0893a07-5f80-4733-8c8e-b3902397826c)
+
+
+
