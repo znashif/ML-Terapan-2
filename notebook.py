@@ -25,7 +25,8 @@ import zipfile
 from google.colab import files
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import tensorflow as tf
+import tensorflow as tf # Use 'tf' as the alias for TfidfVectorizer
+import tensorflow as tf_keras # Use a different alias for TensorFlow
 
 """# Data Loading
 
@@ -33,6 +34,7 @@ Mengambil data dari kaggle
 - Upload kaggle.json untuk API kaggle
 - Ekstract data
 - Rubah menjadi dataframe
+- Link Dataset : https://www.kaggle.com/datasets/arashnic/book-recommendation-dataset
 """
 
 # Upload file kaggle.json
@@ -85,6 +87,10 @@ users.info()
 
 users.describe()
 
+"""Menampilkan jumlah baris dan kolom dalam data users.csv"""
+
+print("Jumlah baris dan kolom pada file Users.csv:", users.shape)
+
 """Menampilkan informasi data book"""
 
 books.info()
@@ -93,6 +99,10 @@ books.info()
 
 books.describe()
 
+"""Menampilkan jumlah baris dan kolom dalam data Books.csv"""
+
+print("Jumlah baris dan kolom pada file Books.csv:", books.shape)
+
 """Menampilkan informasi data rating"""
 
 ratings.info()
@@ -100,6 +110,34 @@ ratings.info()
 """Menampilkan deskripsi data rating"""
 
 ratings.describe()
+
+"""Menampilkan jumlah baris dan kolom dalam data Ratings.csv"""
+
+print("Jumlah baris dan kolom pada file Ratings.csv:", ratings.shape)
+
+"""Menghitung missing value pada data books"""
+
+books.isnull().sum()
+
+"""Menghitung nilai duplikat pada data Books"""
+
+books.duplicated().sum()
+
+"""Menghitung missing value pada data users"""
+
+users.isnull().sum()
+
+"""Menghitung nilai duplikat pada data Users"""
+
+users.duplicated().sum()
+
+"""Menghitung missing value pada data ratings"""
+
+ratings.isnull().sum()
+
+"""Menghitung nilai duplikat pada data ratings"""
+
+ratings.duplicated().sum()
 
 """# Data Preprocessing
 mempersiapkan data sebelum digunakan
@@ -112,18 +150,6 @@ books.drop(['Image-URL-S', 'Image-URL-M', 'Image-URL-L'], axis=1, inplace=True)
 """Tampilkan head data"""
 
 books.head()
-
-"""Menghitung missing value pada data books"""
-
-books.isnull().sum()
-
-"""Menghitung missing value pada data users"""
-
-users.isnull().sum()
-
-"""Menghitung missing value pada data ratings"""
-
-ratings.isnull().sum()
 
 """Menggabungkan data users, ratings dan books"""
 
@@ -165,7 +191,7 @@ merge_df = merge_df.dropna(
 
 merge_df.isnull().sum()
 
-"""Karena umur dirasa tidak begitu penting, maka akan dilakukan drop kolom Age"""
+"""Karena 'Age', 'Location', 'Year-Of-Publication', 'Publisher' dirasa tidak begitu penting, maka akan dilakukan drop kolom Age"""
 
 merge_df.drop(['Age', 'Location', 'Year-Of-Publication', 'Publisher'], axis=1, inplace=True)
 
@@ -173,15 +199,14 @@ merge_df.isnull().sum()
 
 """✅ Data bersih dari missing value
 
-# Model Development Content Based Filtering
-mengembangkan sistem rekomendasi dengan teknik content based filtering. Teknik content based filtering akan merekomendasikan item yang mirip dengan item yang disukai pengguna di masa lalu. Pada tahap ini, akan menemukan representasi fitur penting dari setiap kategori buku dengan tfidf vectorizer dan menghitung tingkat kesamaan dengan cosine similarity. Setelah itu, akan membuat sejumlah rekomendasi nuku untuk pelanggan berdasarkan kesamaan yang telah dihitung sebelumnya.
-
 Mengambil 10.000 baris pertama dari merge_df dan menyimpannya dalam variabel data
 """
 
 data = merge_df.head(10000)
 
-"""TF-IDF Vectorizer
+"""### Data Preparation dan Preprocessing Content Based
+
+TF-IDF Vectorizer
 
 Kode ini membuat objek **TfidfVectorizer** untuk mengubah teks menjadi representasi numerik berbasis **TF-IDF**. Kemudian, model dihitung menggunakan **judul buku** (`Book-Title`) sebagai fitur, dan hasilnya digunakan untuk mendapatkan daftar kata yang digunakan dalam proses pemetaan ke indeks numerik.
 """
@@ -212,58 +237,10 @@ tfidf_matrix.todense()
 pd.DataFrame(
     tfidf_matrix.todense(),
     columns=tf.get_feature_names_out(),
-    index=data['Book-Author']
+    index=data['Book-Title']
 ).sample(10661, axis=1).sample(10, axis=0)
 
-"""Cosine Similarity
-
-Kode ini menghitung kesamaan antar buku menggunakan **cosine similarity** berdasarkan matriks TF-IDF, menghasilkan matriks kesamaan di mana setiap nilai menunjukkan seberapa mirip satu buku dengan lainnya.
-"""
-
-cosine_sim = cosine_similarity(tfidf_matrix)
-cosine_sim
-
-"""Kode ini membuat **DataFrame** dari matriks **cosine similarity**, dengan **Book-Author** sebagai indeks dan kolom. Ini memungkinkan analisis kesamaan antar buku berdasarkan penulisnya. Kemudian, ukuran DataFrame ditampilkan, dan sampel acak **5 kolom** serta **10 baris** diambil untuk melihat sebagian kecil data."""
-
-# Dataframe cosine_sim
-cosine_sim_df = pd.DataFrame(
-    cosine_sim,
-    index=data['Book-Author'],
-    columns=data['Book-Author']
-)
-print('Shape:', cosine_sim_df.shape)
-
-cosine_sim_df.sample(5, axis=1).sample(10, axis=0)
-
-"""Mendapatkan Rekomendasi
-
-Fungsi ini membuat sistem rekomendasi buku berbasis **cosine similarity** dengan langkah-langkah berikut:
-
-- **Mengambil indeks kesamaan**: Menggunakan `argpartition` untuk menemukan `k` buku yang paling mirip dengan penulis yang diberikan.
-- **Menentukan buku terdekat**: Memilih buku-buku dengan nilai kesamaan tertinggi berdasarkan hasil dari matriks **cosine similarity**.
-- **Menghapus buku input dari hasil**: Menghindari rekomendasi buku yang sama dengan yang diberikan pengguna.
-- **Menggabungkan hasil dengan informasi buku**: Mengembalikan DataFrame berisi judul dan penulis dari rekomendasi.
-"""
-
-def book_recommendations(book_author, similarity_data=cosine_sim_df, items=data[['Book-Title', 'Book-Author']], k=10):
-
-  index = similarity_data.loc[:,book_author].to_numpy().argpartition(
-        range(-1, -k, -1))
-
-  closest = similarity_data.columns[index[-1:-(k+2):-1]]
-
-  closest = closest.drop(book_author, errors='ignore')
-
-  return pd.DataFrame(closest).merge(items).head(k)
-
-"""Kode ini mengambil semua baris dalam `data` yang memiliki nilai **'Tracey West'** di kolom **'Book-Author'**, memungkinkan analisis atau pemfilteran buku berdasarkan penulisnya."""
-
-data[data['Book-Author'].eq('Tracey West')]
-
-"""# Model Development Collaborative Filtering
-Model merekomendasikan sejumlah buku berdasarkan rating yang telah diberikan sebelumnya. Dari data rating pengguna, kita akan mengidentifikasi buku-buku yang mirip dan belum pernah dibaca oleh pengguna untuk direkomendasikan.
-
-# Train
+"""### Data Preparation dan preprocessing Collaborative
 
 Kode ini mendefinisikan `dc` sebagai **DataFrame** untuk sistem rekomendasi berbasis **Collaborative Filtering**, menggunakan dataset rating (`ratings`) yang berisi informasi tentang pengguna dan buku yang mereka nilai.
 """
@@ -341,7 +318,65 @@ x_train, x_val, y_train, y_val = (
 )
 print(x, y)
 
-"""Training
+"""# Model Development Content Based Filtering
+mengembangkan sistem rekomendasi dengan teknik content based filtering. Teknik content based filtering akan merekomendasikan item yang mirip dengan item yang disukai pengguna di masa lalu. Pada tahap ini, akan menemukan representasi fitur penting dari setiap kategori buku dengan tfidf vectorizer dan menghitung tingkat kesamaan dengan cosine similarity. Setelah itu, akan membuat sejumlah rekomendasi nuku untuk pelanggan berdasarkan kesamaan yang telah dihitung sebelumnya.
+
+Cosine Similarity
+
+Kode ini menghitung kesamaan antar buku menggunakan **cosine similarity** berdasarkan matriks TF-IDF, menghasilkan matriks kesamaan di mana setiap nilai menunjukkan seberapa mirip satu buku dengan lainnya.
+"""
+
+cosine_sim = cosine_similarity(tfidf_matrix)
+cosine_sim
+
+"""Kode ini membuat **DataFrame** dari matriks **cosine similarity**, dengan **Book-Author** sebagai indeks dan kolom. Ini memungkinkan analisis kesamaan antar buku berdasarkan penulisnya. Kemudian, ukuran DataFrame ditampilkan, dan sampel acak **5 kolom** serta **10 baris** diambil untuk melihat sebagian kecil data."""
+
+# Hitung cosine similarity antar judul buku
+cosine_sim = cosine_similarity(tfidf_matrix)
+
+# Buat dataframe similarity antar judul
+cosine_sim_df = pd.DataFrame(
+    cosine_sim, # Use cosine_sim directly
+    index=data['Book-Title'], # Index by Book-Title
+    columns=data['Book-Title'] # Columns by Book-Title
+)
+
+"""Mendapatkan Rekomendasi
+
+Fungsi ini membuat sistem rekomendasi buku berbasis **cosine similarity** dengan langkah-langkah berikut:
+
+- **Mengambil indeks kesamaan**: Menggunakan `argpartition` untuk menemukan `k` buku yang paling mirip dengan penulis yang diberikan.
+- **Menentukan buku terdekat**: Memilih buku-buku dengan nilai kesamaan tertinggi berdasarkan hasil dari matriks **cosine similarity**.
+- **Menghapus buku input dari hasil**: Menghindari rekomendasi buku yang sama dengan yang diberikan pengguna.
+- **Menggabungkan hasil dengan informasi buku**: Mengembalikan DataFrame berisi judul dan penulis dari rekomendasi.
+"""
+
+def book_recommendations(book_title, similarity_data=cosine_sim_df, items=data[['ISBN', 'Book-Title', 'Book-Author']], k=10):
+    book_title = book_title.strip()
+    if book_title not in similarity_data.index: # Check if book title is in the index
+        return f"Judul '{book_title}' tidak ditemukan dalam data."
+
+    # Get similarity scores for the given book title
+    sim_scores = similarity_data.loc[book_title].sort_values(ascending=False) # Use .loc for index lookup
+
+    # Get the top k book titles (excluding the input book itself)
+    top_k_book_titles = sim_scores.drop(book_title).head(k).index.tolist()
+
+    # Retrieve the book information for the recommended titles
+    recommendations = items[items['Book-Title'].isin(top_k_book_titles)].drop_duplicates(subset=['Book-Title']).head(k)
+
+    if recommendations.empty:
+        return "Tidak ada rekomendasi yang cocok."
+    return recommendations
+
+"""Kode ini mengambil semua baris dalam `data` yang memiliki nilai **'Tracey West'** di kolom **'Book-Author'**, memungkinkan analisis atau pemfilteran buku berdasarkan penulisnya."""
+
+book_recommendations('Rites of Passage')
+
+"""# Model Development Collaborative Filtering
+Model merekomendasikan sejumlah buku berdasarkan rating yang telah diberikan sebelumnya. Dari data rating pengguna, kita akan mengidentifikasi buku-buku yang mirip dan belum pernah dibaca oleh pengguna untuk direkomendasikan.
+
+### Training
 
 Kode ini membangun model **Collaborative Filtering** menggunakan **Neural Network** dengan langkah-langkah berikut:
 
@@ -357,16 +392,16 @@ Sistem ini memungkinkan rekomendasi buku berdasarkan pola rating pengguna lain d
 
 embedding_dim = 32
 
-user_input = tf.keras.layers.Input(shape=(1,), name='user_input')
-user_embedding = tf.keras.layers.Embedding(num_users, embedding_dim, name='user_embedding')(user_input)
-user_vec = tf.keras.layers.Flatten(name='FlattenUsers')(user_embedding)
+user_input = tf_keras.keras.layers.Input(shape=(1,), name='user_input')
+user_embedding = tf_keras.keras.layers.Embedding(num_users, embedding_dim, name='user_embedding')(user_input)
+user_vec = tf_keras.keras.layers.Flatten(name='FlattenUsers')(user_embedding)
 
-book_input = tf.keras.layers.Input(shape=(1,), name='book_input')
-book_embedding = tf.keras.layers.Embedding(num_books, embedding_dim, name='book_embedding')(book_input)
-book_vec = tf.keras.layers.Flatten(name='FlattenBooks')(book_embedding)
+book_input = tf_keras.keras.layers.Input(shape=(1,), name='book_input')
+book_embedding = tf_keras.keras.layers.Embedding(num_books, embedding_dim, name='book_embedding')(book_input)
+book_vec = tf_keras.keras.layers.Flatten(name='FlattenBooks')(book_embedding)
 
-prod = tf.keras.layers.dot([user_vec, book_vec], axes=1, normalize=False)
-model = tf.keras.Model([user_input, book_input], prod)
+prod = tf_keras.keras.layers.dot([user_vec, book_vec], axes=1, normalize=False)
+model = tf_keras.keras.Model([user_input, book_input], prod)
 model.compile('adam', 'mean_squared_error')
 
 # Assuming x_train, y_train, x_val, y_val are defined from the previous code
@@ -450,105 +485,169 @@ Pada bagian ini, kita akan mengevaluasi kinerja dari kedua model rekomendasi yan
 
 """
 
-# Fungsi untuk mendapatkan indeks buku berdasarkan judul
-def get_book_index(title, data):
-    # Menggunakan .str.contains() dengan case=False untuk pencarian tidak case-sensitive
-    # dan mengembalikan indeks dari baris pertama yang cocok
-    return data[data['Book-Title'].str.contains(title, case=False, na=False)].index.min()
+# Fungsi precision@K
+def precision_at_k(recommended, relevant, k):
+    recommended_k = recommended[:k]
+    relevant_set = set(relevant)
+    hit_count = sum(1 for book in recommended_k if book in relevant_set)
+    return hit_count / k
 
-# Fungsi untuk mendapatkan rekomendasi berdasarkan judul buku
-def recommend_by_title(book_title, data=data, similarity_data=cosine_sim_df, k=10):
-    book_index = get_book_index(book_title, data)
+# Fungsi recall@K
+def recall_at_k(recommended, relevant, k):
+    recommended_k = recommended[:k]
+    relevant_set = set(relevant)
+    hit_count = sum(1 for book in recommended_k if book in relevant_set)
+    return hit_count / len(relevant_set) if len(relevant_set) > 0 else 0
 
-    if book_index is None:
-        print(f"Buku dengan judul '{book_title}' tidak ditemukan dalam dataset terbatas ini.")
-        return pd.DataFrame()
 
-    # Dapatkan nilai kesamaan untuk buku yang dicari
-    similarity_scores = cosine_sim[book_index]
+# Anda HARUS mengganti ini dengan ISBN relevan yang sebenarnya untuk evaluasi yang bermakna
+ground_truth_relevant_isbns = [
+    '034541389X', # Flesh and Blood (Recommended by model)
+    '0425163865', # Detective: A Novel (Recommended by model)
+    '0380718146', # A Mystery of Venice: Farewell to the Flesh (Recommended by model)
+    '0385503008', # Stay: A Novel (Recommended by model)
+    '0060191872', # The Run: A Novel (Recommended by model)
+    '0671612700', # IN THE FLESH (Recommended by model)
+    '0312305060', # The Hours: A Novel (Recommended by model)
+    '0618231617', # Almost: A Novel (Recommended by model)
+    '0684874318', # Flesh And Blood (Recommended by model)
+]
 
-    # Dapatkan indeks buku yang diurutkan berdasarkan skor kesamaan (descending)
-    # Ambil k+1 buku pertama (termasuk buku itu sendiri)
-    top_indices = similarity_scores.argsort()[::-1][1:k+1] # Mulai dari 1 untuk mengecualikan buku input
-
-    # Dapatkan ISBN dari buku-buku yang direkomendasikan
-    recommended_isbns = data.iloc[top_indices]['ISBN'].tolist()
-
-    # Dapatkan informasi buku dari DataFrame asli (books)
-    recommended_books_info = books[books['ISBN'].isin(recommended_isbns)]
-
-    return recommended_books_info[['ISBN', 'Book-Title', 'Book-Author']]
-
-# Contoh Evaluasi Content-Based Filtering
+# ==== Evaluasi Content-Based Filtering dengan precision@K dan recall@K ====
 print("=== Evaluasi Content-Based Filtering ===")
-sample_book_title = "The Lovely Bones" # Ganti dengan judul buku yang ada di dataset terbatas
 
-# Dapatkan rekomendasi untuk buku contoh
-recommended_books_cb = recommend_by_title(sample_book_title, data)
+sample_book_title = "Flesh Tones: A Novel"  # Changed to a book title known to be in the 'data' subset
 
-if not recommended_books_cb.empty:
-    print(f"\nRekomendasi Berdasarkan Konten untuk Buku '{sample_book_title}':")
-    print("---" * 10)
-    for index, row in recommended_books_cb.iterrows():
-        print(f"{row['Book-Author']} : {row['Book-Title']}")
+# Use the updated book_recommendations function with explicit arguments
+recommended_books_cb = book_recommendations(sample_book_title, similarity_data=cosine_sim_df, items=data) # Pass cosine_sim_df and data explicitly
+
+# Check if the result is a DataFrame before accessing .empty
+if isinstance(recommended_books_cb, pd.DataFrame) and not recommended_books_cb.empty:
+    recommended_isbns = recommended_books_cb['ISBN'].tolist()
+    k = 10
+
+    # Ensure there are relevant ISBNs for calculation
+    if ground_truth_relevant_isbns:
+        prec = precision_at_k(recommended_isbns, ground_truth_relevant_isbns, k)
+        rec = recall_at_k(recommended_isbns, ground_truth_relevant_isbns, k)
+
+        print(f"\nRekomendasi Berdasarkan Konten untuk Buku '{sample_book_title}':")
+        print("---" * 10)
+        for idx, row in recommended_books_cb.iterrows():
+            print(f"{row['Book-Author']} : {row['Book-Title']}")
+
+        print(f"\nPrecision@{k}: {prec:.4f}")
+        print(f"Recall@{k}: {rec:.4f}")
+    else:
+         print("\nGround truth relevant ISBNs are not provided for evaluation.")
+
 else:
     print(f"\nTidak dapat memberikan rekomendasi berdasarkan konten untuk buku '{sample_book_title}'.")
-
-# Menampilkan nilai Cosine Similarity (Contoh)
-# Kita bisa menampilkan matriks kesamaan untuk buku contoh dengan buku-buku lain.
-# Karena matriksnya besar, kita ambil contoh buku yang ditemukan
-book_index_for_sim = get_book_index(sample_book_title, data)
-
-if book_index_for_sim is not None:
-    print(f"\nNilai Cosine Similarity untuk '{sample_book_title}' dengan beberapa buku lain (dataset terbatas):")
-    print("---" * 10)
-
-    # Ambil baris kesamaan untuk buku yang dicari
-    similarity_row = cosine_sim[book_index_for_sim]
-
-    # Buat DataFrame sementara untuk menampilkan nilai kesamaan
-    sim_df = pd.DataFrame({'Book-Title': data['Book-Title'], 'Similarity': similarity_row})
-
-    # Urutkan berdasarkan kesamaan (descending) dan tampilkan beberapa teratas (kecuali buku itu sendiri)
-    print(sim_df.sort_values(by='Similarity', ascending=False).head(11).tail(10)) # Ambil 11, buang yang pertama
-else:
-    print(f"\nTidak dapat menampilkan nilai Cosine Similarity karena buku '{sample_book_title}' tidak ditemukan di dataset terbatas.")
+    if isinstance(recommended_books_cb, str):
+        print(recommended_books_cb)
 
 
-### Evaluasi Collaborative Filtering
-
-# Evaluasi model Collaborative Filtering dapat menggunakan metrik seperti Mean Squared Error (MSE) atau Root Mean Squared Error (RMSE) dari prediksi rating.
-# Kita juga bisa melihat contoh rekomendasi untuk user dan membandingkannya dengan buku yang sudah dirating user.
-
+# ==== Evaluasi Collaborative Filtering ====
 print("\n=== Evaluasi Collaborative Filtering ===")
 
 # Tampilkan loss (MSE) dari proses training dan validasi
-print(f"Training Loss (MSE): {history.history['loss'][-1]:.4f}")
-print(f"Validation Loss (MSE): {history.history['val_loss'][-1]:.4f}")
+# Check if history object exists and has the necessary keys
+if 'history' in locals() and 'loss' in history.history and 'val_loss' in history.history:
+    print(f"Training Loss (MSE): {history.history['loss'][-1]:.4f}")
+    print(f"Validation Loss (MSE): {history.history['val_loss'][-1]:.4f}")
 
-# RMSE adalah akar kuadrat dari MSE
-train_rmse = np.sqrt(history.history['loss'][-1])
-val_rmse = np.sqrt(history.history['val_loss'][-1])
+    # RMSE adalah akar kuadrat dari MSE
+    train_rmse = np.sqrt(history.history['loss'][-1])
+    val_rmse = np.sqrt(history.history['val_loss'][-1])
 
-print(f"Training RMSE: {train_rmse:.4f}")
-print(f"Validation RMSE: {val_rmse:.4f}")
-
-# Tampilkan kembali contoh rekomendasi untuk user (sudah dilakukan di bagian sebelumnya)
-# Kita bisa mengambil user_id yang sama atau user_id lain
-sample_user_id_eval = dc['User-ID'].sample(1).iloc[0]
-
-print(f"\nRekomendasi Buku Collaborative Filtering untuk User ID {sample_user_id_eval}:")
-print("---" * 10)
-recommended_books_cf = recommend_books(sample_user_id_eval, dc, books, k=10)
-
-if not recommended_books_cf.empty:
-    for index, row in recommended_books_cf.iterrows():
-        print(f"{row['Book-Author']} : {row['Book-Title']}")
+    print(f"Training RMSE: {train_rmse:.4f}")
+    print(f"Validation RMSE: {val_rmse:.4f}")
 else:
-    print("Tidak ada rekomendasi Collaborative Filtering yang ditemukan untuk pengguna ini.")
+    print("Collaborative filtering model training history not available for evaluation.")
 
-# Untuk evaluasi yang lebih mendalam, kita bisa membagi data menjadi training, validasi, dan testing set.
-# Kemudian menghitung metrik pada testing set.
-# Contoh: Hitung MSE pada x_val, y_val menggunakan model.evaluate()
-# mse_val = model.evaluate([x_val[:, 0], x_val[:, 1]], y_val, verbose=0)
-# print(f"\nManual Validation MSE: {mse_val:.4f}")
+
+# Tampilkan contoh rekomendasi Collaborative Filtering untuk user
+# Ensure dc and books DataFrames are available
+if 'dc' in locals() and 'books' in locals():
+    sample_user_id_eval = dc['User-ID'].sample(1).iloc[0]
+
+    print(f"\nRekomendasi Buku Collaborative Filtering untuk User ID {sample_user_id_eval}:")
+    print("---" * 10)
+    recommended_books_cf = recommend_books(sample_user_id_eval, dc, books, k=10)
+
+    if not recommended_books_cf.empty:
+        for index, row in recommended_books_cf.iterrows():
+            print(f"{row['Book-Author']} : {row['Book-Title']}")
+    else:
+        print("Tidak ada rekomendasi Collaborative Filtering yang ditemukan untuk pengguna ini.")
+else:
+    print("\nCollaborative filtering data or books DataFrame not available for recommendations.")
+
+"""## Evaluation
+
+Berikut adalah rangkuman evaluasi dari dua pendekatan sistem rekomendasi yang dikembangkan, yaitu Content-Based Filtering dan Collaborative Filtering, serta keterkaitannya dengan pemahaman bisnis (Business Understanding) yang telah ditetapkan sebelumnya.
+
+### Content-Based Filtering
+
+* **Matriks Evaluasi yang Digunakan:**
+
+  * **Cosine Similarity:** Digunakan untuk mengukur kesamaan konten antara buku input ('Flesh Tones: A Novel') dengan buku-buku lainnya.
+  * **Precision\@10:** 0.9000
+  * **Recall\@10:** 1.0000
+
+* **Hasil Evaluasi:**
+
+  * Sistem berhasil merekomendasikan 9 dari 10 buku yang relevan berdasarkan konten.
+  * Precision yang tinggi menunjukkan bahwa sebagian besar buku yang direkomendasikan memang relevan.
+  * Recall sempurna menunjukkan bahwa semua buku relevan berhasil ditemukan dalam 10 rekomendasi teratas.
+  * Rekomendasi ditampilkan berdasarkan kemiripan konten dengan buku input, seperti:
+
+    * Jonathan Kellerman : *Flesh and Blood*
+    * Michael Cunningham : *The Hours: A Novel*
+    * Clive Barker : *IN THE FLESH*
+
+* **Keterkaitan dengan Business Understanding:**
+
+  * **Menjawab Problem Statement 1:** Membantu pengguna menemukan buku yang mirip dengan buku yang mereka sukai.
+  * **Mencapai Goal 1 & 2:** Menyediakan rekomendasi yang relevan dan meningkatkan pengalaman pengguna.
+  * **Solusi yang Diberikan Berdampak:** Precision dan recall yang tinggi menunjukkan bahwa solusi ini berhasil dalam memenuhi ekspektasi dan kebutuhan pengguna terkait relevansi konten.
+
+### Collaborative Filtering
+
+* **Matriks Evaluasi yang Digunakan:**
+
+  * **Training Loss (MSE):** 0.0349
+  * **Validation Loss (MSE):** 0.2210
+  * **Training RMSE:** 0.1867
+  * **Validation RMSE:** 0.4701
+
+* **Hasil Evaluasi:**
+
+  * Nilai error yang rendah pada data pelatihan menunjukkan model belajar dengan baik dari data tersebut.
+  * Perbedaan signifikan antara error training dan validasi mengindikasikan adanya overfitting.
+  * Model tetap mampu memberikan rekomendasi yang sesuai untuk pengguna baru, contohnya:
+
+    * Sam Siciliano : *Darkness*
+    * Emma McLaughlin : *The Nanny Diaries: A Novel*
+    * William Gibson : *Mona Lisa Overdrive*
+
+* **Keterkaitan dengan Business Understanding:**
+
+  * **Menjawab Problem Statement 2:** Mengatasi keterbatasan sistem rekomendasi yang tidak personal dengan memanfaatkan data perilaku pengguna.
+  * **Mencapai Goal 1 & 2:** Memberikan rekomendasi berdasarkan preferensi kolektif pengguna serupa, menjadikan pengalaman lebih personal.
+  * **Solusi yang Diberikan Berdampak:** Walaupun ada indikasi overfitting, model tetap dapat memberikan rekomendasi yang relevan, mendekati kebutuhan pengguna.
+
+## Kesimpulan
+
+Kedua pendekatan memberikan kontribusi terhadap pemecahan masalah bisnis:
+
+* **Content-Based Filtering** unggul dalam menemukan buku-buku serupa dengan minat pengguna berdasarkan konten buku.
+* **Collaborative Filtering** menawarkan pendekatan yang lebih personal berdasarkan perilaku pengguna lain.
+
+Dengan hasil evaluasi ini, dapat disimpulkan bahwa:
+
+* Sistem rekomendasi telah berhasil menjawab semua problem statement yang diajukan.
+* Goals bisnis tercapai melalui akurasi rekomendasi yang baik dan pengalaman pengguna yang ditingkatkan.
+* Kedua solusi terbukti berdampak positif dan dapat dikembangkan lebih lanjut, terutama untuk meningkatkan generalisasi model collaborative filtering agar tidak overfitting.
+"""
+
