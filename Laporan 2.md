@@ -108,9 +108,7 @@ Model Content-Based Filtering merekomendasikan buku kepada pengguna berdasarkan 
 
 *   **Konsep Dasar**: Jika pengguna menyukai suatu buku, model akan mencari buku lain yang memiliki fitur konten serupa (dalam hal ini, kata-kata dalam judul buku).
 *   **Algoritma yang Digunakan**:
-        *   **Implementasi dalam Kode**: Objek `TfidfVectorizer` diinisialisasi (`tf = TfidfVectorizer()`) dan kemudian diterapkan pada kolom `Book-Title` dari subset data (`data`) menggunakan `tf.fit_transform(data['Book-Title'])`. Hasilnya adalah matriks TF-IDF (`tfidf_matrix`).
-    *   **Cosine Similarity**: Digunakan untuk mengukur tingkat kesamaan antara dua vektor TF-IDF (dalam hal ini, vektor judul buku). Nilai Cosine Similarity berkisar antara 0 (tidak ada kesamaan) hingga 1 (sangat mirip). Semakin tinggi nilai Cosine Similarity antara dua judul buku, semakin mirip kedua buku tersebut dianggap.
-        *   **Implementasi dalam Kode**: Fungsi `cosine_similarity()` dari `sklearn.metrics.pairwise` digunakan untuk menghitung matriks kesamaan antara semua pasangan vektor dalam `tfidf_matrix` (`cosine_sim = cosine_similarity(tfidf_matrix)`). Matriks ini kemudian diubah menjadi DataFrame (`cosine_sim_df`) dengan indeks dan kolom berupa judul buku.
+    *   **Cosine Similarity**: Digunakan untuk mengukur tingkat kesamaan antara dua vektor TF-IDF (yang telah dihasilkan dari Book-Title di tahap Data Preparation). Nilai Cosine Similarity berkisar antara 0 (tidak ada kesamaan) hingga 1 (sangat mirip). Semakin tinggi nilai Cosine Similarity antara dua judul buku, semakin mirip kedua buku tersebut dianggap. Matriks kesamaan antar buku ini (cosine_sim) kemudian diubah menjadi DataFrame (cosine_sim_df) dengan indeks dan kolom berupa judul buku.
 *   **Cara Kerja Rekomendasi**:
     *   Fungsi `book_recommendations` mengambil judul buku input.
     *   Mencari skor kesamaan buku input dengan semua buku lain menggunakan `cosine_sim_df`.
@@ -172,15 +170,19 @@ Berikut adalah rangkuman evaluasi dari dua pendekatan sistem rekomendasi yang di
 
 * **Matriks Evaluasi yang Digunakan:**
 
-  * **Cosine Similarity:** Digunakan untuk mengukur kesamaan konten antara buku input ('Flesh Tones: A Novel') dengan buku-buku lainnya.
   * **Precision\@10:** 0.9000
   * **Recall\@10:** 1.0000
+ 
+* Mengapa metrik precision dan recall relevan ? :
+    * Precision@K: Mengukur akurasi rekomendasi. Ini menjawab, "Dari K buku yang direkomendasikan, berapa banyak yang benar-benar relevan?" Precision tinggi berarti rekomendasi teratas Anda tidak banyak noise atau tidak relevan, menjaga kepuasan pengguna.
+    * Recall@K: Mengukur kelengkapan rekomendasi. Ini menjawab, "Dari semua buku yang seharusnya relevan, berapa banyak yang berhasil ditemukan dan direkomendasikan dalam top-K?" Recall tinggi memastikan sistem Anda menemukan sebanyak mungkin buku relevan untuk pengguna.
 
 * **Hasil Evaluasi:**
 
   * Sistem berhasil merekomendasikan 9 dari 10 buku yang relevan berdasarkan konten.
   * Precision yang tinggi menunjukkan bahwa sebagian besar buku yang direkomendasikan memang relevan.
   * Recall sempurna menunjukkan bahwa semua buku relevan berhasil ditemukan dalam 10 rekomendasi teratas.
+  
   * Rekomendasi ditampilkan berdasarkan kemiripan konten dengan buku input, seperti:
 
     * Jonathan Kellerman : *Flesh and Blood*
